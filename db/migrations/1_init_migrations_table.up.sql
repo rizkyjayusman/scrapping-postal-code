@@ -1,0 +1,5 @@
+CREATE TABLE migrations (
+    id INT(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+    version INT(10) UNSIGNED NOT NULL,
+    PRIMARY KEY (id)
+);
