@@ -168,10 +168,25 @@ func main() {
 }
 
 func insert(db *sql.DB, parent string, level int) {
-	regions := getRegion(db, parent, level)
+	regions, err := getRegion(db, parent, level)
+	if err != nil {
+		log.Println(err)
+		count := 1
+		for count < 3 {
+			log.Printf("retry %v ...\n", count)
+			regions, err = getRegion(db, parent, level)
+			if err == nil {
+				break
+			}
+
+			log.Println(err)
+			time.Sleep(5 * time.Second)
+			count++
+		}
+	}
 
 	// Insert the regions into the database
-	err := inserRegions(db, regions, parent, level)
+	err = inserRegions(db, regions, parent, level)
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -179,7 +194,7 @@ func insert(db *sql.DB, parent string, level int) {
 	fmt.Println("Regions inserted successfully!")
 }
 
-func getRegion(db *sql.DB, parent string, level int) []Region {
+func getRegion(db *sql.DB, parent string, level int) ([]Region, error) {
 	var url string
 	if level == 1 {
 		url = fmt.Sprintf("https://sig.bps.go.id/rest-bridging-pos/getwilayah?level=provinsi&parent=%s", parent)
@@ -198,20 +213,20 @@ func getRegion(db *sql.DB, parent string, level int) []Region {
 	// Create a new GET request
 	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// Send the request
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 	defer resp.Body.Close()
 
 	// Read the response body
 	body, err := ioutil.ReadAll(resp.Body)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	// Print the response
@@ -222,7 +237,7 @@ func getRegion(db *sql.DB, parent string, level int) []Region {
 
 	err = json.Unmarshal([]byte(body), &regions)
 	if err != nil {
-		log.Fatal(err)
+		return nil, err
 	}
 
 	var newRegions []Region
@@ -238,5 +253,5 @@ func getRegion(db *sql.DB, parent string, level int) []Region {
 		}
 	}
 
-	return newRegions
+	return newRegions, nil
 }
