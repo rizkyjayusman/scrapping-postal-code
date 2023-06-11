@@ -7,12 +7,14 @@ import (
 	"io/ioutil"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/mysql"
 	_ "github.com/golang-migrate/migrate/v4/source/file"
+	"github.com/joho/godotenv"
 )
 
 type Region struct {
@@ -23,7 +25,33 @@ type Region struct {
 }
 
 func connectDB() (*sql.DB, error) {
-	db, err := sql.Open("mysql", "root:root1234@tcp(127.0.0.1:3306)/postal_code_scrapping")
+	dbUsername := os.Getenv("DB_USERNAME")
+	if dbUsername == "" {
+		log.Fatal("database username is empty")
+	}
+
+	dbPassword := os.Getenv("DB_PASSWORD")
+	if dbPassword == "" {
+		log.Fatal("database password is empty")
+	}
+
+	dbHost := os.Getenv("DB_HOST")
+	if dbHost == "" {
+		log.Fatal("database host is empty")
+	}
+
+	dbPort := os.Getenv("DB_PORT")
+	if dbPort == "" {
+		log.Fatal("database port is empty")
+	}
+
+	dbName := os.Getenv("DB_NAME")
+	if dbName == "" {
+		log.Fatal("database name is empty")
+	}
+
+	url := fmt.Sprintf("%s:%s@tcp(%s:%s)/%s", dbUsername, dbPassword, dbHost, dbPort, dbName)
+	db, err := sql.Open("mysql", url)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +136,7 @@ func inserRegions(db *sql.DB, regions []Region, parent string, level int) error 
 }
 
 func main() {
+	initiate()
 
 	// Connect to the database
 	db, err := connectDB()
@@ -167,6 +196,13 @@ func main() {
 	log.Println("Completed!")
 }
 
+func initiate() {
+	err := godotenv.Load(".env")
+	if err != nil {
+		log.Fatal(err)
+	}
+}
+
 func insert(db *sql.DB, parent string, level int) {
 	regions, err := getRegion(db, parent, level)
 	if err != nil {
@@ -195,15 +231,20 @@ func insert(db *sql.DB, parent string, level int) {
 }
 
 func getRegion(db *sql.DB, parent string, level int) ([]Region, error) {
+	baseUrl := os.Getenv("BPS_BASE_URL")
+	if baseUrl == "" {
+		log.Fatal("value of bps base url is empty")
+	}
+
 	var url string
 	if level == 1 {
-		url = fmt.Sprintf("https://sig.bps.go.id/rest-bridging-pos/getwilayah?level=provinsi&parent=%s", parent)
+		url = fmt.Sprintf("%s/rest-bridging-pos/getwilayah?level=provinsi&parent=%s", baseUrl, parent)
 	} else if level == 2 {
-		url = fmt.Sprintf("https://sig.bps.go.id/rest-bridging-pos/getwilayah?level=kabupaten&parent=%s", parent)
+		url = fmt.Sprintf("%s/rest-bridging-pos/getwilayah?level=kabupaten&parent=%s", baseUrl, parent)
 	} else if level == 3 {
-		url = fmt.Sprintf("https://sig.bps.go.id/rest-bridging-pos/getwilayah?level=kecamatan&parent=%s", parent)
+		url = fmt.Sprintf("%s/rest-bridging-pos/getwilayah?level=kecamatan&parent=%s", baseUrl, parent)
 	} else {
-		url = fmt.Sprintf("https://sig.bps.go.id/rest-bridging-pos/getwilayah?level=desa&parent=%s", parent)
+		url = fmt.Sprintf("%s/rest-bridging-pos/getwilayah?level=desa&parent=%s", baseUrl, parent)
 	}
 
 	// Create a new HTTP client
