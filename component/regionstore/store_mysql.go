@@ -1,6 +1,13 @@
 package regionstore
 
-import "database/sql"
+import (
+	"database/sql"
+	"fmt"
+)
+
+const (
+	TableName = "regions_test"
+)
 
 type Config struct {
 	DB *sql.DB
@@ -18,7 +25,7 @@ func New(cfg Config) (*MySQL, error) {
 }
 
 func (e *MySQL) GetBpsCodesByLevel(level int) ([]string, error) {
-	query := "SELECT kode_bps FROM regions_test where level = ?"
+	query := fmt.Sprintf("SELECT kode_bps FROM %s where level = ?", TableName)
 	rows, err := e.Config.DB.Query(query, level)
 	if err != nil {
 		return nil, err
@@ -43,7 +50,8 @@ func (e *MySQL) GetBpsCodesByLevel(level int) ([]string, error) {
 }
 
 func (e *MySQL) InsertAll(regions []Region, parent string, level int) error {
-	stmt, err := e.Config.DB.Prepare("INSERT INTO regions_test (kode_bps, nama_bps, kode_pos, nama_pos, parent_id, level) VALUES (?, ?, ?, ?, ?, ?)")
+	query := fmt.Sprintf("INSERT INTO %s (kode_bps, nama_bps, kode_pos, nama_pos, parent_id, level) VALUES (?, ?, ?, ?, ?, ?)", TableName)
+	stmt, err := e.Config.DB.Prepare(query)
 	if err != nil {
 		return err
 	}
