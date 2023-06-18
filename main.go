@@ -6,6 +6,7 @@ import (
 	"log"
 	"os"
 	"scrapper/component/regionservice"
+	"scrapper/component/regionstore"
 	"scrapper/pkg/clientbps"
 	"time"
 
@@ -93,15 +94,20 @@ func main() {
 	parent := "0"
 	level := 1
 
+	var regionStore *regionstore.MySQL
+	regionStore, err = regionstore.New(regionstore.Config{
+		DB: db,
+	})
+
 	var regionService regionservice.Service
 	regionService, err = regionservice.New(regionservice.Config{
-		DB: db,
+		Store: regionStore,
 	})
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	insert(regionService, parent, level)
+	getRegionViaApiAndStore(parent, level)
 
 	ids, err := regionService.GetBpsCodesByLevel(level)
 	if err != nil {
@@ -111,7 +117,8 @@ func main() {
 	level++
 	for _, id := range ids {
 		time.Sleep(3 * time.Second)
-		insert(regionService, id, level)
+		regions := getRegionViaApiAndStore(id, level)
+		regionService.InsertAll(regions, parent, level)
 	}
 
 	ids2, err := regionService.GetBpsCodesByLevel(level)
@@ -122,7 +129,8 @@ func main() {
 	level++
 	for _, id := range ids2 {
 		time.Sleep(3 * time.Second)
-		insert(regionService, id, level)
+		regions := getRegionViaApiAndStore(id, level)
+		regionService.InsertAll(regions, parent, level)
 	}
 
 	ids3, err := regionService.GetBpsCodesByLevel(level)
@@ -133,7 +141,8 @@ func main() {
 	level++
 	for _, id := range ids3 {
 		time.Sleep(3 * time.Second)
-		insert(regionService, id, level)
+		regions := getRegionViaApiAndStore(id, level)
+		regionService.InsertAll(regions, parent, level)
 	}
 
 	log.Println("Completed!")
@@ -146,7 +155,7 @@ func initiate() {
 	}
 }
 
-func insert(regionService regionservice.Service, parent string, level int) {
+func getRegionViaApiAndStore(parent string, level int) []regionservice.Region {
 	regions, err := getRegion(parent, level)
 	if err != nil {
 		log.Println(err)
@@ -164,13 +173,7 @@ func insert(regionService regionservice.Service, parent string, level int) {
 		}
 	}
 
-	// Insert the regions into the database
-	err = regionService.InsertAll(regions, parent, level)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	fmt.Println("Regions inserted successfully!")
+	return regions
 }
 
 func getRegion(parent string, level int) ([]regionservice.Region, error) {

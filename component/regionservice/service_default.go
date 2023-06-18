@@ -1,9 +1,11 @@
 package regionservice
 
-import "database/sql"
+import (
+	"scrapper/component/regionstore"
+)
 
 type Config struct {
-	DB *sql.DB
+	Store regionstore.Store
 }
 
 type Default struct {
@@ -18,54 +20,13 @@ func New(cfg Config) (*Default, error) {
 }
 
 func (e *Default) GetBpsCodesByLevel(level int) ([]string, error) {
-	query := "SELECT kode_bps FROM regions_test where level = ?"
-	rows, err := e.Config.DB.Query(query, level)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var ids []string
-	for rows.Next() {
-		var id string
-		err := rows.Scan(&id)
-		if err != nil {
-			return nil, err
-		}
-		ids = append(ids, id)
-	}
-
-	if err = rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return ids, nil
+	return e.Config.Store.GetBpsCodesByLevel(level)
 }
 
 func (e *Default) InsertAll(regions []Region, parent string, level int) error {
-	stmt, err := e.Config.DB.Prepare("INSERT INTO regions_test (kode_bps, nama_bps, kode_pos, nama_pos, parent_id, level) VALUES (?, ?, ?, ?, ?, ?)")
-	if err != nil {
-		return err
-	}
-	defer stmt.Close()
-
-	tx, err := e.Config.DB.Begin()
-	if err != nil {
-		return err
-	}
-
+	var regionStores []regionstore.Region
 	for _, region := range regions {
-		_, err := tx.Stmt(stmt).Exec(region.KodeBps, region.NamaBps, region.KodePos, region.NamaPos, parent, level)
-		if err != nil {
-			tx.Rollback()
-			return err
-		}
+		regionStores = append(regionStores, regionstore.Region(region))
 	}
-
-	err = tx.Commit()
-	if err != nil {
-		return err
-	}
-
-	return nil
+	return e.Config.Store.InsertAll(regionStores, parent, level)
 }
