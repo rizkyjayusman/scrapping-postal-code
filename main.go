@@ -2,12 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"log"
-	"net/http"
 	"os"
+	"scrapper/pkg/clientbps"
 	"time"
 
 	_ "github.com/go-sql-driver/mysql"
@@ -204,13 +202,13 @@ func initiate() {
 }
 
 func insert(db *sql.DB, parent string, level int) {
-	regions, err := getRegion(db, parent, level)
+	regions, err := getRegion(parent, level)
 	if err != nil {
 		log.Println(err)
 		count := 1
 		for count < 3 {
 			log.Printf("retry %v ...\n", count)
-			regions, err = getRegion(db, parent, level)
+			regions, err = getRegion(parent, level)
 			if err == nil {
 				break
 			}
@@ -230,66 +228,33 @@ func insert(db *sql.DB, parent string, level int) {
 	fmt.Println("Regions inserted successfully!")
 }
 
-func getRegion(db *sql.DB, parent string, level int) ([]Region, error) {
-	baseUrl := os.Getenv("BPS_BASE_URL")
-	if baseUrl == "" {
-		log.Fatal("value of bps base url is empty")
-	}
-
-	var url string
-	if level == 1 {
-		url = fmt.Sprintf("%s/rest-bridging-pos/getwilayah?level=provinsi&parent=%s", baseUrl, parent)
-	} else if level == 2 {
-		url = fmt.Sprintf("%s/rest-bridging-pos/getwilayah?level=kabupaten&parent=%s", baseUrl, parent)
-	} else if level == 3 {
-		url = fmt.Sprintf("%s/rest-bridging-pos/getwilayah?level=kecamatan&parent=%s", baseUrl, parent)
-	} else {
-		url = fmt.Sprintf("%s/rest-bridging-pos/getwilayah?level=desa&parent=%s", baseUrl, parent)
-	}
-
-	// Create a new HTTP client
-	client := http.DefaultClient
-	client.Timeout = 2 * time.Second
-
-	// Create a new GET request
-	req, err := http.NewRequest("GET", url, nil)
+func getRegion(parent string, level int) ([]Region, error) {
+	var bpsclient clientbps.Client
+	bpsclient, err := clientbps.NewHTTP()
 	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 
-	// Send the request
-	resp, err := client.Do(req)
+	res, err := bpsclient.GetRegion(parent, level)
 	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-
-	// Read the response body
-	body, err := ioutil.ReadAll(resp.Body)
-	if err != nil {
-		return nil, err
-	}
-
-	// Print the response
-	fmt.Println(string(body))
-	fmt.Println("=================================================")
-
-	var regions []Region
-
-	err = json.Unmarshal([]byte(body), &regions)
-	if err != nil {
-		return nil, err
+		log.Fatal(err)
 	}
 
 	var newRegions []Region
 	hmap := make(map[string]struct{})
-	for _, region := range regions {
+	for _, region := range res {
 		if region.KodeBps == "" && region.KodePos == "" && region.NamaBps == "" && region.NamaPos == "" {
 			continue
 		}
 
 		if _, exist := hmap[region.KodeBps]; !exist {
-			newRegions = append(newRegions, region)
+			item := Region{
+				KodeBps: region.KodeBps,
+				NamaBps: region.NamaBps,
+				KodePos: region.KodePos,
+				NamaPos: region.NamaPos,
+			}
+			newRegions = append(newRegions, item)
 			hmap[region.KodeBps] = struct{}{}
 		}
 	}
